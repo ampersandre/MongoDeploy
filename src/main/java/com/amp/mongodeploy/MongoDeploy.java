@@ -15,15 +15,16 @@ public class MongoDeploy {
 
     private DB mongoDb;
     private List<MongoDeployScript> mongoDeployScripts;
-    private boolean hasError = false;
+    private boolean hasException = false;
+    private MongoDeployException lastException;
 
     public MongoDeploy(DB mongoDb, List<MongoDeployScript> mongoDeployScripts) {
         this.mongoDb = mongoDb;
         this.mongoDeployScripts = mongoDeployScripts;
     }
 
-    public boolean hasError() {
-        return hasError;
+    public boolean hasException() {
+        return hasException;
     }
 
     public void runScripts() {
@@ -31,9 +32,16 @@ public class MongoDeploy {
             try {
                 runScript(script);
             } catch (Exception e) {
-                hasError = true;
+                hasException = true;
+                lastException = new MongoDeployException(constructExceptionMessage(e), e);
+                break;
             }
         }
+    }
+
+    private String constructExceptionMessage(Exception e) {
+        return String.format("Exception encountered while running deploy scripts: [%s - %s]",
+                e.getClass().getName(), e.getMessage());
     }
 
     private void runScript(MongoDeployScript script) {
@@ -58,4 +66,8 @@ public class MongoDeploy {
     private DBCollection getCollection() { return mongoDb.getCollection(MONGO_DEPLOY_COLLECTION); }
 
     private DBObject dbObject(String key, Object value) { return new BasicDBObject(key, value); }
+
+    public MongoDeployException getException() {
+        return lastException;
+    }
 }

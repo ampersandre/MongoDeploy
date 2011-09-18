@@ -39,6 +39,20 @@ public class MongoDeployTest extends MongoTest {
     }
 
     @Test
+    public void runScripts_shouldRunAllScripts_whenMultipleScriptsAreProvided() {
+        MongoDeployScript mockScript2 = mock(MongoDeployScript.class);
+        mongoDeploy = new MongoDeploy(mongoDb, Arrays.asList(mockScript, mockScript2));
+
+        //execute
+        mongoDeploy.runScripts();
+
+        //assert
+        InOrder inOrder = inOrder(mockScript, mockScript2);
+        inOrder.verify(mockScript).run();
+        inOrder.verify(mockScript2).run();
+    }
+
+    @Test
     public void runScripts_shouldNotRunTheGivenScript_whenItHasAlreadyBeenRun() {
         when(mockScript.getScriptName()).thenReturn("ClassName");
 
@@ -48,6 +62,21 @@ public class MongoDeployTest extends MongoTest {
 
         //assert
         verify(mockScript, times(1)).run();
+    }
+
+    @Test
+    public void runScripts_shouldContinueRunningAllScripts_whenOneScriptHasAlreadyBeenRun() {
+        when(mockScript.getScriptName()).thenReturn("Script1");
+        mongoDeploy.runScripts();
+        MongoDeployScript mockScript2 = mock(MongoDeployScript.class);
+        when(mockScript2.getScriptName()).thenReturn("Script2");
+        mongoDeploy = new MongoDeploy(mongoDb, Arrays.asList(mockScript, mockScript2));
+
+        //execute
+        mongoDeploy.runScripts();
+
+        //assert
+        verify(mockScript2, times(1)).run();
     }
 
     @Test
@@ -76,27 +105,8 @@ public class MongoDeployTest extends MongoTest {
     }
 
     @Test
-    public void hasError_shouldReturnTrue_whenAnErrorOccursWhenAScriptThrowsAnError() {
+    public void runScripts_shouldNotRunSubsequentScripts_whenAScriptFails() {
         doThrow(new RuntimeException()).when(mockScript).run();
-
-        //execute
-        mongoDeploy.runScripts();
-
-        //assert
-        assertTrue(mongoDeploy.hasError());
-    }
-
-    @Test
-    public void hasError_shouldReturnFalse_whenTheScriptRunsNormally() {
-        //execute
-        mongoDeploy.runScripts();
-
-        //assert
-        assertFalse(mongoDeploy.hasError());
-    }
-
-    @Test
-    public void runScripts_shouldRunAllScripts_whenMultipleScriptsAreProvided() {
         MongoDeployScript mockScript2 = mock(MongoDeployScript.class);
         mongoDeploy = new MongoDeploy(mongoDb, Arrays.asList(mockScript, mockScript2));
 
@@ -104,8 +114,44 @@ public class MongoDeployTest extends MongoTest {
         mongoDeploy.runScripts();
 
         //assert
-        InOrder inOrder = inOrder(mockScript, mockScript2);
-        inOrder.verify(mockScript).run();
-        inOrder.verify(mockScript2).run();
+        verifyZeroInteractions(mockScript2);
+    }
+
+    @Test
+    public void hasException_shouldReturnTrue_whenAnErrorOccursWhenAScriptThrowsAnException() {
+        doThrow(new RuntimeException()).when(mockScript).run();
+
+        //execute
+        mongoDeploy.runScripts();
+
+        //assert
+        assertTrue(mongoDeploy.hasException());
+    }
+
+    @Test
+    public void hasException_shouldReturnFalse_whenTheScriptRunsNormally() {
+        //execute
+        mongoDeploy.runScripts();
+
+        //assert
+        assertFalse(mongoDeploy.hasException());
+    }
+
+    @Test
+    public void getException_shouldReturnMongoDeployException_whenTheScriptThrowsAnException() {
+        String expectedMessage = "Exception happened";
+        RuntimeException expectedException = new RuntimeException(expectedMessage);
+        doThrow(expectedException).when(mockScript).run();
+
+        //execute
+        mongoDeploy.runScripts();
+
+        //assert
+        MongoDeployException actualException = mongoDeploy.getException();
+        assertNotNull(actualException);
+        assertEquals(expectedException, actualException.getCause());
+        String expectedMongoDeployExceptionMessage = String.format("Exception encountered while running deploy scripts: [%s - %s]",
+                expectedException.getClass().getName(), expectedMessage);
+        assertEquals(expectedMongoDeployExceptionMessage, actualException.getMessage());
     }
 }
